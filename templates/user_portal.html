@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel hero-panel">
+    <h2>User Access</h2>
+    <p class="muted">Choose login if you already have an account, or register as a new user.</p>
+    <div class="choice-grid">
+        <div class="choice-card">
+            <h3>Login</h3>
+            <p>Use existing credentials.</p>
+            <a class="btn" href="{{ url_for('login') }}">Go to Login</a>
+        </div>
+        <div class="choice-card">
+            <h3>Register</h3>
+            <p>Create a new customer account.</p>
+            <a class="btn secondary" href="{{ url_for('register') }}">Go to Register</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

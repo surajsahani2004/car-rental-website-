@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Admin Access Code</h2>
+    <p class="muted">Use <strong>BOSS123</strong> for Boss or <strong>MANAGER123</strong> for Manager registration.</p>
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        <label>{{ form.access_code.label }}
+            {{ form.access_code(placeholder="Enter admin access code") }}
+        </label>
+        {{ form.submit(class_="btn") }}
+    </form>
+</section>
+{% endblock %}

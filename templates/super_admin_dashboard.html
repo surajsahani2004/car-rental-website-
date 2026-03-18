@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Super Admin Dashboard</h2>
+    <p class="muted">Global control across all companies and all records.</p>
+</section>
+
+<section class="panel">
+    <h3>Create Company</h3>
+    <form method="POST" action="{{ url_for('create_company') }}" class="form-card">
+        {{ company_form.hidden_tag() }}
+        <label>{{ company_form.name.label }}
+            {{ company_form.name(placeholder='Enter company name') }}
+        </label>
+        {{ company_form.submit(class_='btn') }}
+    </form>
+</section>
+
+<section class="panel">
+    <h3>Send Order / Notification</h3>
+    <form method="POST" action="{{ url_for('send_super_admin_notification') }}" class="form-card">
+        {{ notification_form.hidden_tag() }}
+        <label>{{ notification_form.recipient_id.label }}
+            {{ notification_form.recipient_id() }}
+        </label>
+        <label>{{ notification_form.notification_type.label }}
+            {{ notification_form.notification_type() }}
+        </label>
+        <label>{{ notification_form.message.label }}
+            {{ notification_form.message(rows='4', placeholder='Write order or notification message') }}
+        </label>
+        {{ notification_form.submit(class_='btn') }}
+    </form>
+</section>
+
+<section class="panel">
+    <h3>Sent Orders / Notifications</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>To</th>
+                    <th>Type</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for note in sent_notifications %}
+                    <tr>
+                        <td>{{ note.id }}</td>
+                        <td>{{ note.recipient.username if note.recipient else '-' }}</td>
+                        <td>{{ note.notification_type|title }}</td>
+                        <td>{{ note.message }}</td>
+                        <td>{{ 'Read' if note.is_read else 'Unread' }}</td>
+                    </tr>
+                {% endfor %}
+                {% if not sent_notifications %}
+                    <tr>
+                        <td colspan="5" class="muted">No sent messages yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Companies</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Owner</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for company in companies %}
+                    <tr>
+                        <td>{{ company.id }}</td>
+                        <td>{{ company.name }}</td>
+                        <td>{{ boss_map.get(company.owner_id, '-') }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('delete_company', company_id=company.id) }}">
+                                {{ action_form.hidden_tag() }}
+                                <button class="btn danger" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not companies %}
+                    <tr>
+                        <td colspan="4" class="muted">No companies found.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Help & Complaint Requests</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Requester</th>
+                    <th>Company</th>
+                    <th>Type</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in support_requests %}
+                    <tr>
+                        <td>{{ req.id }}</td>
+                        <td>{{ req.username }}</td>
+                        <td>{{ req.email }}</td>
+                        <td>{{ (req.requester_role or 'user')|title }}</td>
+                        <td>{{ req.company_name or '-' }}</td>
+                        <td>{{ req.request_type }}</td>
+                        <td>{{ req.message }}</td>
+                        <td>{{ req.status }}</td>
+                        <td>
+                            {% if req.status != 'resolved' %}
+                                <form method="POST" action="{{ url_for('resolve_support_request', request_id=req.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn secondary" type="submit">Resolve</button>
+                                </form>
+                            {% else %}
+                                <span class="muted">Done</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not support_requests %}
+                    <tr>
+                        <td colspan="9" class="muted">No support requests yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>All Users</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Gender</th>
+                    <th>Age</th>
+                    <th>Age Group</th>
+                    <th>Has License</th>
+                    <th>License Number</th>
+                    <th>Role</th>
+                    <th>Approval</th>
+                    <th>Company</th>
+                    <th>Boss</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.full_name or '-' }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ (user.gender or '-')|title }}</td>
+                        <td>{{ user.age if user.age is not none else '-' }}</td>
+                        <td>
+                            {% if user.age is not none %}
+                                {{ 'Young' if user.age < 40 else 'Old' }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ (user.has_driving_license or 'no')|title }}</td>
+                        <td>{{ user.driving_license_no or '-' }}</td>
+                        <td>{{ user.role }}</td>
+                        <td>{{ user.approval_status }}</td>
+                        <td>{{ company_map.get(user.company_id, '-') }}</td>
+                        <td>{{ boss_map.get(user.boss_id, '-') }}</td>
+                        <td>
+                            <div class="inline-actions">
+                                {% if user.id == current_user.id %}
+                                    <span class="muted">Current</span>
+                                {% else %}
+                                    <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}">
+                                        {{ action_form.hidden_tag() }}
+                                        <button class="btn danger" type="submit">Delete</button>
+                                    </form>
+                                {% endif %}
+                                {% if user.role == 'manager' and user.approval_status == 'pending' %}
+                                    <span class="muted">Boss Approval Required</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>All Cars</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Photo</th>
+                    <th>Name</th>
+                    <th>Model</th>
+                    <th>City</th>
+                    <th>Price/Day</th>
+                    <th>Company</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for car in cars %}
+                    <tr>
+                        <td>{{ car.id }}</td>
+                        <td>
+                            {% if car.image %}
+                                <img class="car-thumb" src="{{ url_for('static', filename=car.image) }}" alt="{{ car.name }} photo">
+                            {% else %}
+                                <span class="muted">No photo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ car.name }}</td>
+                        <td>{{ car.model }}</td>
+                        <td>{{ car.city }}</td>
+                        <td>${{ '%.2f'|format(car.price_per_day) }}</td>
+                        <td>{{ company_map.get(car.company_id, '-') }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>All Bookings</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Car</th>
+                    <th>Dates</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Company</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for booking in bookings %}
+                    <tr>
+                        <td>{{ booking.id }}</td>
+                        <td>{{ booking.user.username }}</td>
+                        <td>{{ booking.car.name }}</td>
+                        <td>{{ booking.start_date }} to {{ booking.end_date }}</td>
+                        <td>${{ '%.2f'|format(booking.total_cost) }}</td>
+                        <td>{{ booking.status }}</td>
+                        <td>{{ company_map.get(booking.company_id, '-') }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

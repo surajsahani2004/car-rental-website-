@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set role_titles = {'customer': 'User', 'boss': 'Boss', 'manager': 'Manager'} %}
+<section class="panel">
+    <h2>{{ role_titles.get(selected_role, 'User') }} Registration</h2>
+    <p class="muted">Selected account type: {{ role_titles.get(selected_role, 'User') }}</p>
+    {% if selected_role == 'customer' %}
+        <p class="muted">For Boss/Manager registration, use <a class="link" href="{{ url_for('admin_access') }}">Admin Access</a>.</p>
+    {% endif %}
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        <input type="hidden" name="selected_role" value="{{ selected_role }}">
+        <label>{{ form.username.label }}
+            {{ form.username() }}
+        </label>
+        <label>{{ form.full_name.label }}
+            {{ form.full_name(placeholder='Enter your full name') }}
+        </label>
+        <label>{{ form.email.label }}
+            {{ form.email() }}
+        </label>
+        <label>{{ form.gender.label }}
+            {{ form.gender() }}
+        </label>
+        <label>{{ form.age.label }}
+            {{ form.age(placeholder='Enter age') }}
+        </label>
+        {% if selected_role == 'customer' %}
+            <label>{{ form.has_driving_license.label }}
+                {{ form.has_driving_license(id='has_driving_license') }}
+            </label>
+            <label id="driving-license-wrap">{{ form.driving_license_no.label }}
+                {{ form.driving_license_no(id='driving_license_no', placeholder='Enter driving license number') }}
+            </label>
+        {% endif %}
+        {% if selected_role in ['boss', 'manager'] %}
+            <label>{{ form.company_name.label }}
+                {{ form.company_name(placeholder='Enter company name') }}
+            </label>
+        {% endif %}
+        {% if selected_role == 'boss' %}
+            <label>{{ form.company_address.label }}
+                {{ form.company_address(placeholder='Enter company address') }}
+            </label>
+        {% endif %}
+        {% if selected_role == 'manager' %}
+            <p class="muted">Manager will be linked automatically to company boss after company lookup.</p>
+        {% endif %}
+        <label>{{ form.password.label }}
+            {{ form.password() }}
+        </label>
+        <label>{{ form.confirm_password.label }}
+            {{ form.confirm_password() }}
+        </label>
+        {{ form.submit(class_="btn") }}
+    </form>
+    {% if selected_role != 'customer' %}
+        <p class="muted">Admin code flow used. If this role is wrong, go back to <a class="link" href="{{ url_for('index') }}">Start</a>.</p>
+    {% endif %}
+</section>
+{% if selected_role == 'customer' %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const hasLicense = document.getElementById('has_driving_license');
+    const licenseWrap = document.getElementById('driving-license-wrap');
+    const licenseInput = document.getElementById('driving_license_no');
+
+    if (!hasLicense || !licenseWrap || !licenseInput) return;
+
+    function toggleLicenseField() {
+        const needLicense = hasLicense.value === 'yes';
+        licenseWrap.style.display = needLicense ? 'grid' : 'none';
+        licenseInput.required = needLicense;
+        if (!needLicense) {
+            licenseInput.value = '';
+        }
+    }
+
+    hasLicense.addEventListener('change', toggleLicenseField);
+    toggleLicenseField();
+});
+</script>
+{% endif %}
+{% endblock %}

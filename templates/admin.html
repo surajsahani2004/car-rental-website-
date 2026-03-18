@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    {% if current_user.role in ['boss', 'admin'] %}
+        <h2>Boss Dashboard</h2>
+        <p class="muted">Full control for cars, users, and manager approvals.</p>
+    {% else %}
+        <h2>Manager Dashboard</h2>
+        <p class="muted">You can manage cars and bookings only after boss approval.</p>
+    {% endif %}
+    {% if manager_pending %}
+        <p class="flash-inline">Your manager account is pending approval from boss.</p>
+    {% endif %}
+</section>
+
+{% if can_approve_managers %}
+<section class="panel">
+    <h3>Manager Approval Requests</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in manager_requests %}
+                    <tr>
+                        <td>{{ req.id }}</td>
+                        <td>{{ req.username }}</td>
+                        <td>{{ req.email }}</td>
+                        <td>{{ req.approval_status }}</td>
+                        <td>
+                            <div class="inline-actions">
+                                <form method="POST" action="{{ url_for('approve_manager', user_id=req.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn" type="submit">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('reject_manager', user_id=req.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn danger" type="submit">Reject</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not manager_requests %}
+                    <tr>
+                        <td colspan="5" class="muted">No pending manager requests.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if can_manage_operations %}
+<section class="panel">
+    <h3>Cars</h3>
+    <a class="btn" href="{{ url_for('add_car') }}">Add New Car</a>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Model</th>
+                    <th>City</th>
+                    <th>Price/Day</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for car in cars %}
+                    <tr>
+                        <td>{{ car.id }}</td>
+                        <td>{{ car.name }}</td>
+                        <td>{{ car.model }}</td>
+                        <td>{{ car.city }}</td>
+                        <td>${{ '%.2f'|format(car.price_per_day) }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('delete_car', car_id=car.id) }}">
+                                {{ action_form.hidden_tag() }}
+                                <button class="btn danger" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not cars %}
+                    <tr>
+                        <td colspan="6" class="muted">No cars added yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Bookings</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Car</th>
+                    <th>Dates</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for booking in bookings %}
+                    <tr>
+                        <td>{{ booking.id }}</td>
+                        <td>{{ booking.user.username }}</td>
+                        <td>{{ booking.car.name }}</td>
+                        <td>{{ booking.start_date }} to {{ booking.end_date }}</td>
+                        <td>${{ '%.2f'|format(booking.total_cost) }}</td>
+                        <td>{{ booking.status }}</td>
+                        <td>{{ booking.payment_status }}</td>
+                        <td>
+                            {% if booking.status != 'cancelled' %}
+                                <form method="POST" action="{{ url_for('cancel_booking', booking_id=booking.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn secondary" type="submit">Cancel</button>
+                                </form>
+                            {% else %}
+                                <span class="muted">Closed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not bookings %}
+                    <tr>
+                        <td colspan="8" class="muted">No bookings available.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if can_manage_users %}
+<section class="panel">
+    <h3>Users</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Approval</th>
+                    <th>Approved By</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.role }}</td>
+                        <td>{{ user.approval_status }}</td>
+                        <td>{{ approved_by_map.get(user.approved_by_id, '-') }}</td>
+                        <td>
+                            {% if user.role not in ['admin', 'boss'] %}
+                                <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn danger" type="submit">Delete</button>
+                                </form>
+                            {% else %}
+                                <span class="muted">Protected</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not users %}
+                    <tr>
+                        <td colspan="7" class="muted">No users found.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

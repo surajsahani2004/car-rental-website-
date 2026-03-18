@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel hero-panel">
+    <h2>Choose Your Access</h2>
+    <p class="muted">Select your path to continue.</p>
+    <div class="choice-grid">
+        <div class="choice-card">
+            <h3>User</h3>
+            <p>Browse cars, create bookings, and download invoices.</p>
+            <a class="btn" href="{{ url_for('user_portal') }}">Continue as User</a>
+        </div>
+        <div class="choice-card">
+            <h3>Admin</h3>
+            <p>Enter access code to continue as Boss or Manager.</p>
+            <a class="btn secondary" href="{{ url_for('admin_access') }}">Continue as Admin</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

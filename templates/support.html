@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Help & Complaint</h2>
+    <p class="muted">Send your issue directly to king (super admin).</p>
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        {% if not current_user.is_authenticated %}
+            <label>{{ form.name.label }}
+                {{ form.name(placeholder='Enter your name') }}
+            </label>
+            <label>{{ form.email.label }}
+                {{ form.email(placeholder='Enter your email') }}
+            </label>
+            <label>{{ form.requester_role.label }}
+                {{ form.requester_role() }}
+            </label>
+            <label id="company-name-wrap">{{ form.company_name.label }}
+                {{ form.company_name(placeholder='Enter company name (Admin only)') }}
+            </label>
+        {% else %}
+            <p class="muted">Logged in as <strong>{{ current_user.full_name or current_user.username }}</strong> ({{ current_user.email }})</p>
+            <p class="muted">Requester type: <strong>{{ 'Admin' if is_logged_in_admin else 'User' }}</strong></p>
+            {% if is_logged_in_admin %}
+                <label>{{ form.company_name.label }}
+                    {{ form.company_name(placeholder='Enter your company name') }}
+                </label>
+            {% endif %}
+        {% endif %}
+        <label>{{ form.request_type.label }}
+            {{ form.request_type() }}
+        </label>
+        <label>{{ form.message.label }}
+            {{ form.message(rows='5', placeholder='Write your issue or request') }}
+        </label>
+        {{ form.submit(class_='btn') }}
+    </form>
+</section>
+
+{% if not current_user.is_authenticated %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const roleSelect = document.getElementById('{{ form.requester_role.id }}');
+    const companyWrap = document.getElementById('company-name-wrap');
+    const companyInput = document.getElementById('{{ form.company_name.id }}');
+
+    if (!roleSelect || !companyWrap || !companyInput) {
+        return;
+    }
+
+    function toggleCompanyField() {
+        const isAdmin = roleSelect.value === 'admin';
+        companyWrap.style.display = isAdmin ? 'block' : 'none';
+        companyInput.required = isAdmin;
+        if (!isAdmin) {
+            companyInput.value = '';
+        }
+    }
+
+    roleSelect.addEventListener('change', toggleCompanyField);
+    toggleCompanyField();
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Manager Dashboard</h2>
+    <p class="muted">Company: {{ current_company_name or '-' }}</p>
+    <p class="muted">Linked Boss: {{ boss_map.get(current_user.boss_id, '-') }}</p>
+    <p class="muted">Approval Status: {{ current_user.approval_status }}</p>
+    {% if manager_pending %}
+        <p class="flash-inline">Waiting for boss approval. You can access operations after approval.</p>
+    {% endif %}
+</section>
+
+{% if not manager_pending %}
+<section class="panel">
+    <h3>Cars</h3>
+    <a class="btn" href="{{ url_for('add_car') }}">Add New Car</a>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Photo</th>
+                    <th>Name</th>
+                    <th>Model</th>
+                    <th>City</th>
+                    <th>Price/Day</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for car in cars %}
+                    <tr>
+                        <td>{{ car.id }}</td>
+                        <td>
+                            {% if car.image %}
+                                <img class="car-thumb" src="{{ url_for('static', filename=car.image) }}" alt="{{ car.name }} photo">
+                            {% else %}
+                                <span class="muted">No photo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ car.name }}</td>
+                        <td>{{ car.model }}</td>
+                        <td>{{ car.city }}</td>
+                        <td>${{ '%.2f'|format(car.price_per_day) }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('delete_car', car_id=car.id) }}">
+                                {{ action_form.hidden_tag() }}
+                                <button class="btn danger" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not cars %}
+                    <tr>
+                        <td colspan="7" class="muted">No cars available.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Bookings</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Car</th>
+                    <th>Dates</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for booking in bookings %}
+                    <tr>
+                        <td>{{ booking.id }}</td>
+                        <td>{{ booking.user.username }}</td>
+                        <td>{{ booking.car.name }}</td>
+                        <td>{{ booking.start_date }} to {{ booking.end_date }}</td>
+                        <td>${{ '%.2f'|format(booking.total_cost) }}</td>
+                        <td>{{ booking.status }}</td>
+                        <td>{{ booking.payment_status }}</td>
+                        <td>
+                            {% if booking.status != 'cancelled' %}
+                                <form method="POST" action="{{ url_for('cancel_booking', booking_id=booking.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn secondary" type="submit">Cancel</button>
+                                </form>
+                            {% else %}
+                                <span class="muted">Closed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not bookings %}
+                    <tr>
+                        <td colspan="8" class="muted">No bookings available.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

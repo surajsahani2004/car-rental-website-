@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Add New Car</h2>
+    <form method="POST" class="form-card" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+        <label>{{ form.name.label }}
+            {{ form.name() }}
+        </label>
+        <label>{{ form.model.label }}
+            {{ form.model() }}
+        </label>
+        <label>{{ form.city.label }}
+            {{ form.city() }}
+        </label>
+        <label>{{ form.price_per_day.label }}
+            {{ form.price_per_day() }}
+        </label>
+        <label>{{ form.photo.label }}
+            {{ form.photo() }}
+        </label>
+        <p class="muted">Optional: upload car image (`jpg`, `jpeg`, `png`, `webp`).</p>
+        {% if current_user.role in ['super_admin', 'admin'] %}
+            <label>{{ form.company_name.label }}
+                {{ form.company_name(placeholder='Enter company name') }}
+            </label>
+        {% endif %}
+        {{ form.submit(class_="btn") }}
+    </form>
+</section>
+{% endblock %}

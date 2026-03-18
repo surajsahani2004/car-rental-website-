@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set admin_roles = ['super_admin', 'admin', 'boss', 'manager'] %}
+<section class="shop-hero">
+    <div>
+        <h2>Book Cars In Minutes</h2>
+        <p>Find trusted rentals across cities with fast booking and simple billing.</p>
+        {% if active_company_name %}
+            <p class="muted">Company: {{ active_company_name }}</p>
+        {% endif %}
+    </div>
+    <form class="search-form" method="GET" action="{{ url_for('home') }}">
+        <input type="text" name="q" placeholder="Search by name, model, or city" value="{{ search }}">
+        <button type="submit" class="btn">Search</button>
+        {% if search %}
+            <a class="link" href="{{ url_for('home') }}">Clear</a>
+        {% endif %}
+    </form>
+</section>
+
+<section class="panel">
+    <h2 class="section-title">Available Cars</h2>
+    <div class="card-grid">
+        {% for car in cars %}
+            <article class="shop-card">
+                <div class="car-photo-wrap">
+                    {% if car.image %}
+                        <img class="car-photo" src="{{ url_for('static', filename=car.image) }}" alt="{{ car.name }} photo" loading="lazy" onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;car-photo placeholder&quot;>No Photo</div>');">
+                    {% else %}
+                        <div class="car-photo placeholder">No Photo</div>
+                    {% endif %}
+                </div>
+                <div class="shop-card-top">
+                    <h3>{{ car.name }}</h3>
+                    <span class="badge">{{ car.city }}</span>
+                </div>
+                <p class="muted">Model {{ car.model }}</p>
+                <p class="price-tag">${{ '%.2f'|format(car.price_per_day) }} <span>/ day</span></p>
+                {% if current_user.is_authenticated and current_user.role not in admin_roles %}
+                    <a class="btn" href="{{ url_for('book_car', car_id=car.id) }}">Book Now</a>
+                {% elif current_user.is_authenticated and current_user.role in admin_roles %}
+                    <p class="muted">Admin roles cannot book. Use a customer account.</p>
+                {% else %}
+                    <a class="btn secondary" href="{{ url_for('login') }}">Login to Book</a>
+                {% endif %}
+            </article>
+        {% endfor %}
+    </div>
+    {% if not cars %}
+        <p class="muted">No cars found for your search.</p>
+    {% endif %}
+</section>
+{% endblock %}

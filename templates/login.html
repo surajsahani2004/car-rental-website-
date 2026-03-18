@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Login</h2>
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        <label>{{ form.username.label }}
+            {{ form.username() }}
+        </label>
+        <label>{{ form.password.label }}
+            {{ form.password() }}
+        </label>
+        {{ form.submit(class_="btn") }}
+    </form>
+</section>
+{% endblock %}

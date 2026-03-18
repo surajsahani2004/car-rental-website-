@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Book {{ car.name }}</h2>
+    <div class="card">
+        <p><strong>Model:</strong> {{ car.model }}</p>
+        <p><strong>City:</strong> {{ car.city }}</p>
+        <p><strong>Price per day:</strong> ${{ '%.2f'|format(car.price_per_day) }}</p>
+        <p class="muted">GST (18%) will be added during payment.</p>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Select Dates</h3>
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        <label>{{ form.start_date.label }}
+            {{ form.start_date() }}
+        </label>
+        <label>{{ form.end_date.label }}
+            {{ form.end_date() }}
+        </label>
+        {{ form.submit(class_="btn") }}
+    </form>
+</section>
+{% endblock %}

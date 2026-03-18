@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>My Bookings</h2>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Car</th>
+                    <th>Dates</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Invoice</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for booking in bookings %}
+                    <tr>
+                        <td>{{ booking.id }}</td>
+                        <td>{{ booking.car.name }}</td>
+                        <td>{{ booking.start_date }} to {{ booking.end_date }}</td>
+                        <td>${{ '%.2f'|format(booking.total_cost) }}</td>
+                        <td>{{ booking.status }}</td>
+                        <td>{{ booking.payment_status }}</td>
+                        <td>
+                            {% if booking.payment_status == 'paid' %}
+                                <a class="btn" href="{{ url_for('invoice', booking_id=booking.id) }}">Download</a>
+                            {% else %}
+                                <a class="btn secondary" href="{{ url_for('payment', booking_id=booking.id) }}">Pay Now</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if not bookings %}
+        <p class="muted">No bookings yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

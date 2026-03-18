@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Payment</h2>
+    <div class="card">
+        <p><strong>Car:</strong> {{ booking.car.name }} ({{ booking.car.model }})</p>
+        <p><strong>Dates:</strong> {{ booking.start_date }} to {{ booking.end_date }}</p>
+        <p><strong>Total Amount:</strong> ${{ '%.2f'|format(booking.total_cost) }}</p>
+        <p class="muted">This is a simulated payment for demo purposes.</p>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Choose Payment Method</h3>
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        <label>{{ form.payment_method.label }}
+            {{ form.payment_method() }}
+        </label>
+        {{ form.submit(class_="btn") }}
+    </form>
+</section>
+{% endblock %}
