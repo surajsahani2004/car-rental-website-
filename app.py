@@ -19,8 +19,15 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///safar_suvidha.db'
+os.makedirs(app.instance_path, exist_ok=True)
+default_sqlite_db = os.path.join(app.instance_path, 'safar_suvidha.db')
+database_url = os.environ.get('DATABASE_URL', f"sqlite:///{default_sqlite_db}")
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'change-this-in-production')
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['CAR_UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'uploads', 'cars')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 # For MySQL, you can switch the line above to:

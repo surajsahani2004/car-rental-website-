@@ -29,11 +29,21 @@ Flask + SQLite based multi-company car rental system with role-based dashboards.
 
 1. Create virtual environment and activate it.
 2. Install packages:
-   `pip install flask flask-sqlalchemy flask-login flask-wtf qrcode reportlab`
+   `pip install -r requirements.txt`
 3. Run:
    `python app.py`
 4. Open:
    `http://127.0.0.1:5000`
+
+## Deploy On Render
+
+1. Push this project to GitHub.
+2. In Render, choose **New +** -> **Blueprint**.
+3. Select this repo. Render will auto-detect `render.yaml`.
+4. Deploy.
+5. After first deploy, open the app URL. Super admin login:
+   - Username: `king`
+   - Password: `developer`
 
 ## Tech Stack
 
@@ -48,3 +58,4 @@ Flask + SQLite based multi-company car rental system with role-based dashboards.
 
 - Database file is created automatically in `instance/`.
 - For a fresh reset, delete `instance/safar_suvidha.db` and run again.
+- On Render, PostgreSQL is auto-provisioned from `render.yaml` and linked via `DATABASE_URL`.
