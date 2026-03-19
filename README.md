@@ -1,45 +1,50 @@
-# Safar Suvidha Travel Facility
+# Safar Suvidha Car Rental
 
-A car rental web application built with Flask and SQLAlchemy.
+Flask + SQLite based multi-company car rental system with role-based dashboards.
 
-## Features
+## Main Features
 
-- User registration and login
-- Car catalogue with availability (multiple cities)
-- Booking system with date selection, GST calculation (18%)
-- PDF invoice generation with QR code for verification
-- Admin dashboard for managing bookings and adding cars
-- Role-based access (customer, admin)
+- Roles: `super_admin (king)`, `boss`, `manager`, `customer`
+- Company-level data isolation
+- Boss/Manager registration via admin access codes
+- Manager approval flow (only company boss can approve/reject)
+- Customer car booking with overlap (double-booking) prevention
+- Payment simulation + PDF invoice + QR code
+- Car photo upload
+- Help/Complaint request to king
+- King-to-user Order/Notification system
+- User profile fields: full name, gender, age, driving license yes/no
 
-## Setup
+## Default Super Admin
 
-1. Ensure Python 3.14+ is installed.
-2. Install dependencies: `pip install flask flask-sqlalchemy flask-login flask-wtf qrcode reportlab`
-3. Run the app: `python app.py`
-4. Open browser to `http://localhost:5000`
+- Username: `king`
+- Password: `developer`
 
-## Usage
+## Admin Access Codes
 
-- Register as a new user or login.
-- Browse available cars on the home page.
-- Book a car by selecting dates (cost includes GST).
-- Download PDF invoice with QR code after booking.
-- Admin login: email=admin@example.com, password=admin123
-- Admin can view bookings and add new cars.
+- Boss: `BOSS123`
+- Manager: `MANAGER123`
 
-## Technologies
+## Quick Start
 
-- Flask (web framework)
-- SQLAlchemy (database ORM)
-- SQLite (database)
-- HTML/CSS/JS (frontend)
-- ReportLab (PDF generation)
-- qrcode (QR code generation)
+1. Create virtual environment and activate it.
+2. Install packages:
+   `pip install flask flask-sqlalchemy flask-login flask-wtf qrcode reportlab`
+3. Run:
+   `python app.py`
+4. Open:
+   `http://127.0.0.1:5000`
 
-## Future Enhancements
+## Tech Stack
 
-- Real payment gateway integration
-- Availability calendar
-- User feedback system
-- Email notifications
-- Responsive design improvements
+- Flask
+- SQLAlchemy
+- SQLite
+- Jinja2 + HTML/CSS
+- ReportLab
+- qrcode
+
+## Notes
+
+- Database file is created automatically in `instance/`.
+- For a fresh reset, delete `instance/safar_suvidha.db` and run again.
