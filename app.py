@@ -6,7 +6,7 @@ from flask_wtf.file import FileField, FileAllowed
 from wtforms import StringField, PasswordField, SubmitField, DateField, FloatField, SelectField, TextAreaField, IntegerField
 from wtforms.validators import DataRequired, Email, EqualTo, NumberRange, Length
 from datetime import datetime
-from sqlalchemy import or_, text, func
+from sqlalchemy import or_, text, func, inspect
 from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 import qrcode
@@ -72,63 +72,93 @@ def apply_company_scope(query, company_column, user_obj):
     return query.filter(company_column == user_obj.company_id)
 
 def ensure_booking_columns():
-    if db.engine.name != 'sqlite':
-        return
     with db.engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(booking)")).fetchall()]
-        if 'payment_status' not in cols:
-            conn.execute(text("ALTER TABLE booking ADD COLUMN payment_status VARCHAR(50) DEFAULT 'pending'"))
-        if 'payment_method' not in cols:
-            conn.execute(text("ALTER TABLE booking ADD COLUMN payment_method VARCHAR(50)"))
-        if 'transaction_id' not in cols:
-            conn.execute(text("ALTER TABLE booking ADD COLUMN transaction_id VARCHAR(100)"))
-        if 'created_at' not in cols:
-            conn.execute(text("ALTER TABLE booking ADD COLUMN created_at DATETIME"))
-        conn.execute(text("UPDATE booking SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+        cols = {col['name'] for col in inspect(db.engine).get_columns('booking')}
+        if db.engine.name == 'sqlite':
+            if 'payment_status' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN payment_status VARCHAR(50) DEFAULT \'pending\''))
+            if 'payment_method' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN payment_method VARCHAR(50)'))
+            if 'transaction_id' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN transaction_id VARCHAR(100)'))
+            if 'created_at' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN created_at DATETIME'))
+        else:
+            if 'payment_status' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT \'pending\''))
+            if 'payment_method' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50)'))
+            if 'transaction_id' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100)'))
+            if 'created_at' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN IF NOT EXISTS created_at TIMESTAMP'))
+        conn.execute(text('UPDATE "booking" SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL'))
 
 def ensure_user_columns():
-    if db.engine.name != 'sqlite':
-        return
     with db.engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(user)")).fetchall()]
-        if 'approval_status' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN approval_status VARCHAR(30) DEFAULT 'approved'"))
-        if 'approved_by_id' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN approved_by_id INTEGER"))
-        if 'company_name' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN company_name VARCHAR(150)"))
-        if 'company_address' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN company_address VARCHAR(250)"))
-        if 'boss_id' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN boss_id INTEGER"))
-        if 'company_id' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN company_id INTEGER"))
-        conn.execute(text("UPDATE user SET role = 'super_admin' WHERE role = 'admin'"))
-        conn.execute(text("UPDATE user SET approval_status = 'approved' WHERE approval_status IS NULL"))
-        conn.execute(text("UPDATE user SET approval_status = 'pending' WHERE role = 'manager' AND approval_status = 'approved'"))
-        conn.execute(text("UPDATE user SET boss_id = approved_by_id WHERE role = 'manager' AND boss_id IS NULL AND approved_by_id IS NOT NULL"))
+        cols = {col['name'] for col in inspect(db.engine).get_columns('user')}
+        if db.engine.name == 'sqlite':
+            if 'approval_status' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN approval_status VARCHAR(30) DEFAULT \'approved\''))
+            if 'approved_by_id' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN approved_by_id INTEGER'))
+            if 'company_name' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN company_name VARCHAR(150)'))
+            if 'company_address' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN company_address VARCHAR(250)'))
+            if 'boss_id' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN boss_id INTEGER'))
+            if 'company_id' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN company_id INTEGER'))
+        else:
+            if 'approval_status' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS approval_status VARCHAR(30) DEFAULT \'approved\''))
+            if 'approved_by_id' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS approved_by_id INTEGER'))
+            if 'company_name' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_name VARCHAR(150)'))
+            if 'company_address' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_address VARCHAR(250)'))
+            if 'boss_id' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS boss_id INTEGER'))
+            if 'company_id' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_id INTEGER'))
+        conn.execute(text('UPDATE "user" SET role = \'super_admin\' WHERE role = \'admin\''))
+        conn.execute(text('UPDATE "user" SET approval_status = \'approved\' WHERE approval_status IS NULL'))
+        conn.execute(text('UPDATE "user" SET approval_status = \'pending\' WHERE role = \'manager\' AND approval_status = \'approved\''))
+        conn.execute(text('UPDATE "user" SET boss_id = approved_by_id WHERE role = \'manager\' AND boss_id IS NULL AND approved_by_id IS NOT NULL'))
 
 def ensure_user_profile_columns():
-    if db.engine.name != 'sqlite':
-        return
     with db.engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(user)")).fetchall()]
-        if 'full_name' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN full_name VARCHAR(150)"))
-        if 'gender' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN gender VARCHAR(20)"))
-        if 'age' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN age INTEGER"))
-        if 'driving_license_no' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN driving_license_no VARCHAR(100)"))
-        if 'has_driving_license' not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN has_driving_license VARCHAR(10) DEFAULT 'no'"))
+        cols = {col['name'] for col in inspect(db.engine).get_columns('user')}
+        if db.engine.name == 'sqlite':
+            if 'full_name' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN full_name VARCHAR(150)'))
+            if 'gender' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN gender VARCHAR(20)'))
+            if 'age' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN age INTEGER'))
+            if 'driving_license_no' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN driving_license_no VARCHAR(100)'))
+            if 'has_driving_license' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN has_driving_license VARCHAR(10) DEFAULT \'no\''))
+        else:
+            if 'full_name' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS full_name VARCHAR(150)'))
+            if 'gender' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS gender VARCHAR(20)'))
+            if 'age' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS age INTEGER'))
+            if 'driving_license_no' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS driving_license_no VARCHAR(100)'))
+            if 'has_driving_license' not in cols:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS has_driving_license VARCHAR(10) DEFAULT \'no\''))
 
-        conn.execute(text("UPDATE user SET full_name = username WHERE full_name IS NULL OR TRIM(full_name) = ''"))
-        conn.execute(text("UPDATE user SET gender = 'not_specified' WHERE gender IS NULL OR TRIM(gender) = ''"))
-        conn.execute(text("UPDATE user SET age = 18 WHERE age IS NULL AND role IN ('super_admin', 'admin', 'boss', 'manager', 'customer')"))
+        conn.execute(text('UPDATE "user" SET full_name = username WHERE full_name IS NULL OR TRIM(full_name) = \'\''))
+        conn.execute(text('UPDATE "user" SET gender = \'not_specified\' WHERE gender IS NULL OR TRIM(gender) = \'\''))
+        conn.execute(text('UPDATE "user" SET age = 18 WHERE age IS NULL AND role IN (\'super_admin\', \'admin\', \'boss\', \'manager\', \'customer\')'))
         conn.execute(text("""
-            UPDATE user
+            UPDATE "user"
             SET has_driving_license = CASE
                 WHEN driving_license_no IS NOT NULL AND TRIM(driving_license_no) != '' THEN 'yes'
                 ELSE 'no'
@@ -137,45 +167,53 @@ def ensure_user_profile_columns():
         """))
 
 def ensure_car_columns():
-    if db.engine.name != 'sqlite':
-        return
     with db.engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(car)")).fetchall()]
-        if 'company_id' not in cols:
-            conn.execute(text("ALTER TABLE car ADD COLUMN company_id INTEGER"))
+        cols = {col['name'] for col in inspect(db.engine).get_columns('car')}
+        if db.engine.name == 'sqlite':
+            if 'company_id' not in cols:
+                conn.execute(text('ALTER TABLE "car" ADD COLUMN company_id INTEGER'))
+        else:
+            if 'company_id' not in cols:
+                conn.execute(text('ALTER TABLE "car" ADD COLUMN IF NOT EXISTS company_id INTEGER'))
 
 def ensure_booking_company_column():
-    if db.engine.name != 'sqlite':
-        return
     with db.engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(booking)")).fetchall()]
-        if 'company_id' not in cols:
-            conn.execute(text("ALTER TABLE booking ADD COLUMN company_id INTEGER"))
+        cols = {col['name'] for col in inspect(db.engine).get_columns('booking')}
+        if db.engine.name == 'sqlite':
+            if 'company_id' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN company_id INTEGER'))
+        else:
+            if 'company_id' not in cols:
+                conn.execute(text('ALTER TABLE "booking" ADD COLUMN IF NOT EXISTS company_id INTEGER'))
 
 def ensure_support_columns():
-    if db.engine.name != 'sqlite':
-        return
     with db.engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(support_request)")).fetchall()]
-        if 'requester_role' not in cols:
-            conn.execute(text("ALTER TABLE support_request ADD COLUMN requester_role VARCHAR(30) DEFAULT 'user'"))
-        if 'company_name' not in cols:
-            conn.execute(text("ALTER TABLE support_request ADD COLUMN company_name VARCHAR(150)"))
-        conn.execute(text("UPDATE support_request SET requester_role = 'user' WHERE requester_role IS NULL"))
+        cols = {col['name'] for col in inspect(db.engine).get_columns('support_request')}
+        if db.engine.name == 'sqlite':
+            if 'requester_role' not in cols:
+                conn.execute(text('ALTER TABLE "support_request" ADD COLUMN requester_role VARCHAR(30) DEFAULT \'user\''))
+            if 'company_name' not in cols:
+                conn.execute(text('ALTER TABLE "support_request" ADD COLUMN company_name VARCHAR(150)'))
+        else:
+            if 'requester_role' not in cols:
+                conn.execute(text('ALTER TABLE "support_request" ADD COLUMN IF NOT EXISTS requester_role VARCHAR(30) DEFAULT \'user\''))
+            if 'company_name' not in cols:
+                conn.execute(text('ALTER TABLE "support_request" ADD COLUMN IF NOT EXISTS company_name VARCHAR(150)'))
+        conn.execute(text('UPDATE "support_request" SET requester_role = \'user\' WHERE requester_role IS NULL'))
         conn.execute(text("""
-            UPDATE support_request
+            UPDATE "support_request"
             SET requester_role = 'admin'
             WHERE user_id IN (
-                SELECT id FROM user WHERE role IN ('super_admin', 'admin', 'boss', 'manager')
+                SELECT id FROM "user" WHERE role IN ('super_admin', 'admin', 'boss', 'manager')
             )
         """))
         conn.execute(text("""
-            UPDATE support_request
+            UPDATE "support_request"
             SET company_name = (
-                SELECT company.name
-                FROM user
-                JOIN company ON company.id = user.company_id
-                WHERE user.id = support_request.user_id
+                SELECT c.name
+                FROM "user" AS u
+                JOIN company AS c ON c.id = u.company_id
+                WHERE u.id = "support_request".user_id
             )
             WHERE company_name IS NULL
         """))
