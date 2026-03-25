@@ -7,6 +7,48 @@
 </section>
 
 <section class="panel">
+    <h3>Filter Data</h3>
+    <form method="GET" action="{{ url_for('super_admin_dashboard') }}" class="form-card filter-grid">
+        <label>Company
+            <select name="company_id">
+                <option value="all" {% if filters.company_id == 'all' %}selected{% endif %}>All Companies</option>
+                {% for company in company_filter_options %}
+                    <option value="{{ company.id }}" {% if filters.company_id == company.id|string %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Role
+            <select name="role">
+                <option value="all" {% if filters.role == 'all' %}selected{% endif %}>All Roles</option>
+                <option value="customer" {% if filters.role == 'customer' %}selected{% endif %}>Customer</option>
+                <option value="boss" {% if filters.role == 'boss' %}selected{% endif %}>Boss</option>
+                <option value="manager" {% if filters.role == 'manager' %}selected{% endif %}>Manager</option>
+                <option value="super_admin" {% if filters.role == 'super_admin' %}selected{% endif %}>Super Admin</option>
+            </select>
+        </label>
+        <label>Boss
+            <select name="boss_id">
+                <option value="all" {% if filters.boss_id == 'all' %}selected{% endif %}>All Bosses</option>
+                {% for boss in boss_filter_options %}
+                    <option value="{{ boss.id }}" {% if filters.boss_id == boss.id|string %}selected{% endif %}>
+                        {{ boss.username }} ({{ company_map.get(boss.company_id, '-') }})
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>User Search
+            <input type="text" name="user_search" value="{{ filters.user_search }}" placeholder="Username / full name / email">
+        </label>
+        <div class="inline-actions">
+            <button class="btn" type="submit">Apply Filter</button>
+            <a class="btn secondary" href="{{ url_for('super_admin_dashboard') }}">Clear</a>
+        </div>
+    </form>
+</section>
+
+<section class="panel">
     <h3>Create Company</h3>
     <form method="POST" action="{{ url_for('create_company') }}" class="form-card">
         {{ company_form.hidden_tag() }}
@@ -96,6 +138,54 @@
                 {% if not companies %}
                     <tr>
                         <td colspan="4" class="muted">No companies found.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h3>Boss Approval Requests</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Company</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in boss_requests %}
+                    <tr>
+                        <td>{{ req.id }}</td>
+                        <td>{{ req.username }}</td>
+                        <td>{{ req.full_name or '-' }}</td>
+                        <td>{{ req.email }}</td>
+                        <td>{{ company_map.get(req.company_id, req.company_name or '-') }}</td>
+                        <td>{{ req.approval_status }}</td>
+                        <td>
+                            <div class="inline-actions">
+                                <form method="POST" action="{{ url_for('approve_boss', user_id=req.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn" type="submit">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('reject_boss', user_id=req.id) }}">
+                                    {{ action_form.hidden_tag() }}
+                                    <button class="btn danger" type="submit">Reject</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                {% if not boss_requests %}
+                    <tr>
+                        <td colspan="7" class="muted">No pending boss requests.</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -210,10 +300,18 @@
                                 {% if user.role == 'manager' and user.approval_status == 'pending' %}
                                     <span class="muted">Boss Approval Required</span>
                                 {% endif %}
+                                {% if user.role == 'boss' and user.approval_status == 'pending' %}
+                                    <span class="muted">King Approval Required</span>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
                 {% endfor %}
+                {% if not users %}
+                    <tr>
+                        <td colspan="14" class="muted">No users found for selected filter.</td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
@@ -252,6 +350,11 @@
                         <td>{{ company_map.get(car.company_id, '-') }}</td>
                     </tr>
                 {% endfor %}
+                {% if not cars %}
+                    <tr>
+                        <td colspan="7" class="muted">No cars found for selected filter.</td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
@@ -284,6 +387,11 @@
                         <td>{{ company_map.get(booking.company_id, '-') }}</td>
                     </tr>
                 {% endfor %}
+                {% if not bookings %}
+                    <tr>
+                        <td colspan="7" class="muted">No bookings found for selected filter.</td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>

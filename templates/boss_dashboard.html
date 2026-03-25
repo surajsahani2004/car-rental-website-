@@ -5,8 +5,12 @@
     <h2>Boss Dashboard</h2>
     <p class="muted">Full control: cars, users, bookings, and manager approvals.</p>
     <p class="muted">Company: {{ current_company_name or 'Not Set' }}</p>
+    {% if boss_pending %}
+        <p class="flash-inline">Waiting for king approval. Boss controls unlock after approval.</p>
+    {% endif %}
 </section>
 
+{% if not boss_pending %}
 <section class="panel">
     <h3>Manager Approval Requests</h3>
     <div class="table-wrap">
@@ -216,4 +220,5 @@
         </table>
     </div>
 </section>
+{% endif %}
 {% endblock %}

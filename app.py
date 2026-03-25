@@ -46,14 +46,17 @@ def is_super_admin(user):
 def is_boss(user):
     return user.role == 'boss'
 
+def is_boss_approved(user):
+    return user.role == 'boss' and user.approval_status == 'approved'
+
 def has_full_control(user):
-    return is_super_admin(user) or is_boss(user)
+    return is_super_admin(user) or is_boss_approved(user)
 
 def is_manager_approved(user):
     return user.role == 'manager' and user.approval_status == 'approved'
 
 def can_manage_operations(user):
-    return is_super_admin(user) or is_boss(user) or is_manager_approved(user)
+    return is_super_admin(user) or is_boss_approved(user) or is_manager_approved(user)
 
 def dashboard_endpoint_for(user):
     if is_super_admin(user):
@@ -125,7 +128,21 @@ def ensure_user_columns():
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_id INTEGER'))
         conn.execute(text('UPDATE "user" SET role = \'super_admin\' WHERE role = \'admin\''))
         conn.execute(text('UPDATE "user" SET approval_status = \'approved\' WHERE approval_status IS NULL'))
-        conn.execute(text('UPDATE "user" SET approval_status = \'pending\' WHERE role = \'manager\' AND approval_status = \'approved\''))
+        conn.execute(text('UPDATE "user" SET approval_status = \'approved\' WHERE role = \'super_admin\''))
+        conn.execute(text("""
+            UPDATE "user"
+            SET approval_status = 'pending'
+            WHERE role = 'manager'
+              AND approval_status = 'approved'
+              AND approved_by_id IS NULL
+        """))
+        conn.execute(text("""
+            UPDATE "user"
+            SET approval_status = 'pending'
+            WHERE role = 'boss'
+              AND approval_status = 'approved'
+              AND approved_by_id IS NULL
+        """))
         conn.execute(text('UPDATE "user" SET boss_id = approved_by_id WHERE role = \'manager\' AND boss_id IS NULL AND approved_by_id IS NOT NULL'))
 
 def ensure_user_profile_columns():
@@ -749,8 +766,18 @@ def register():
                 return redirect(url_for('register', role='boss'))
             duplicate_company = Company.query.filter(func.lower(Company.name) == company_name.lower()).first()
             if duplicate_company:
-                flash('Company already exists. Boss must use a unique company.')
-                return redirect(url_for('register', role='boss'))
+                if duplicate_company.owner_id:
+                    flash('Company already has a boss. Use another company name.')
+                    return redirect(url_for('register', role='boss'))
+                pending_boss = User.query.filter(
+                    User.role == 'boss',
+                    User.company_id == duplicate_company.id,
+                    User.approval_status.in_(['pending', 'approved'])
+                ).first()
+                if pending_boss:
+                    flash('Boss approval for this company is already pending/active.')
+                    return redirect(url_for('register', role='boss'))
+                selected_company = duplicate_company
 
         manager_boss = None
         if selected_role == 'manager':
@@ -767,6 +794,9 @@ def register():
             manager_boss = db.session.get(User, selected_company.owner_id)
             if not manager_boss or manager_boss.role != 'boss':
                 flash('Company boss not found.')
+                return redirect(url_for('register', role='manager'))
+            if manager_boss.approval_status != 'approved':
+                flash('Boss approval is pending. Manager registration not allowed yet.')
                 return redirect(url_for('register', role='manager'))
             if manager_boss.company_id != selected_company.id:
                 flash('Company boss mapping is invalid.')
@@ -794,7 +824,7 @@ def register():
             driving_license_no=driving_license_no,
             password=form.password.data,
             role=selected_role,
-            approval_status='pending' if selected_role == 'manager' else 'approved',
+            approval_status='pending' if selected_role in {'boss', 'manager'} else 'approved',
             company_name=company_name if selected_role in {'boss', 'manager', 'customer'} else None,
             company_address=company_address if selected_role == 'boss' else None,
             boss_id=manager_boss.id if manager_boss else None,
@@ -806,10 +836,15 @@ def register():
             # Boss creates a new company and becomes owner.
             if selected_role == 'boss':
                 db.session.flush()
-                new_company = Company(name=company_name, owner_id=user.id)
-                db.session.add(new_company)
-                db.session.flush()
-                user.company_id = new_company.id
+                if selected_company:
+                    user.company_id = selected_company.id
+                    user.company_name = selected_company.name
+                else:
+                    # Company is created, but ownership gets finalized only after king approval.
+                    new_company = Company(name=company_name, owner_id=None)
+                    db.session.add(new_company)
+                    db.session.flush()
+                    user.company_id = new_company.id
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
@@ -817,6 +852,8 @@ def register():
             return redirect(url_for('register', role=selected_role))
         if selected_role == 'manager':
             flash('Manager account created. Wait for boss approval before managing operations.')
+        elif selected_role == 'boss':
+            flash('Boss account created. Wait for king approval before using boss controls.')
         else:
             flash('Registration successful! Now login.')
             if registration_note:
@@ -833,6 +870,9 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.password == form.password.data:
             login_user(user)
+            if user.role == 'boss' and user.approval_status != 'approved':
+                flash('Boss account is pending king approval.')
+                return redirect(url_for('boss_dashboard'))
             if user.role == 'manager' and user.approval_status != 'approved':
                 flash('Manager account is pending boss approval.')
                 return redirect(url_for('manager_dashboard'))
@@ -1004,8 +1044,17 @@ def build_admin_context(user_obj):
     cars_query = Car.query
     bookings_query = Booking.query
     companies = []
+    company_filter_options = []
     support_requests = []
     sent_notifications = []
+    boss_requests = []
+    boss_filter_options = []
+    filters = {
+        'company_id': 'all',
+        'role': 'all',
+        'boss_id': 'all',
+        'user_search': ''
+    }
     notification_form = NotificationForm()
 
     if not is_super_admin(user_obj):
@@ -1013,10 +1062,81 @@ def build_admin_context(user_obj):
         cars_query = cars_query.filter_by(company_id=user_obj.company_id)
         bookings_query = bookings_query.filter_by(company_id=user_obj.company_id)
     else:
-        companies = Company.query.order_by(Company.id.asc()).all()
+        company_filter_options = Company.query.order_by(Company.name.asc()).all()
+        companies = list(company_filter_options)
         support_requests = SupportRequest.query.order_by(SupportRequest.id.asc()).all()
         sent_notifications = Notification.query.filter_by(sender_id=user_obj.id).order_by(Notification.id.asc()).all()
         notification_form.recipient_id.choices = notification_recipient_choices(user_obj.id)
+        boss_filter_options = User.query.filter_by(role='boss').order_by(User.username.asc()).all()
+
+        role_options = {'all', 'customer', 'boss', 'manager', 'super_admin'}
+        raw_company_filter = (request.args.get('company_id') or 'all').strip()
+        raw_role_filter = (request.args.get('role') or 'all').strip().lower()
+        raw_boss_filter = (request.args.get('boss_id') or 'all').strip()
+        search_filter = (request.args.get('user_search') or '').strip()
+
+        filters['company_id'] = raw_company_filter if raw_company_filter == 'all' or raw_company_filter.isdigit() else 'all'
+        filters['role'] = raw_role_filter if raw_role_filter in role_options else 'all'
+        filters['boss_id'] = raw_boss_filter if raw_boss_filter == 'all' or raw_boss_filter.isdigit() else 'all'
+        filters['user_search'] = search_filter
+
+        company_id_filter = int(filters['company_id']) if filters['company_id'].isdigit() else None
+        boss_id_filter = int(filters['boss_id']) if filters['boss_id'].isdigit() else None
+
+        if company_id_filter:
+            users_query = users_query.filter(User.company_id == company_id_filter)
+            cars_query = cars_query.filter(Car.company_id == company_id_filter)
+            bookings_query = bookings_query.filter(Booking.company_id == company_id_filter)
+            selected_company = db.session.get(Company, company_id_filter)
+            if selected_company:
+                support_requests = [r for r in support_requests if r.company_name == selected_company.name]
+                companies = [selected_company]
+            else:
+                support_requests = []
+                companies = []
+
+        if boss_id_filter:
+            selected_boss = User.query.filter_by(id=boss_id_filter, role='boss').first()
+            if selected_boss:
+                users_query = users_query.filter(
+                    or_(
+                        User.id == selected_boss.id,
+                        User.boss_id == selected_boss.id,
+                        User.company_id == selected_boss.company_id
+                    )
+                )
+                if not company_id_filter:
+                    if selected_boss.company_id:
+                        cars_query = cars_query.filter(Car.company_id == selected_boss.company_id)
+                        bookings_query = bookings_query.filter(Booking.company_id == selected_boss.company_id)
+                        selected_company = db.session.get(Company, selected_boss.company_id)
+                        if selected_company:
+                            support_requests = [r for r in support_requests if r.company_name == selected_company.name]
+                            companies = [selected_company]
+                    else:
+                        cars_query = cars_query.filter(Car.id == -1)
+                        bookings_query = bookings_query.filter(Booking.id == -1)
+                        support_requests = []
+                        companies = []
+            else:
+                users_query = users_query.filter(User.id == -1)
+                cars_query = cars_query.filter(Car.id == -1)
+                bookings_query = bookings_query.filter(Booking.id == -1)
+                support_requests = []
+                companies = []
+
+        if filters['role'] != 'all':
+            users_query = users_query.filter(User.role == filters['role'])
+
+        if search_filter:
+            like = f"%{search_filter}%"
+            users_query = users_query.filter(
+                or_(
+                    User.username.ilike(like),
+                    User.full_name.ilike(like),
+                    User.email.ilike(like)
+                )
+            )
 
     if is_super_admin(user_obj):
         users = users_query.order_by(User.id.asc()).all()
@@ -1028,10 +1148,27 @@ def build_admin_context(user_obj):
         bookings = bookings_query.order_by(Booking.id.desc()).all() if can_manage_operations(user_obj) else []
 
     manager_requests = []
-    if is_boss(user_obj):
+    if is_boss_approved(user_obj):
         requests_query = User.query.filter_by(role='manager', approval_status='pending')
         requests_query = requests_query.filter_by(company_id=user_obj.company_id, boss_id=user_obj.id)
         manager_requests = requests_query.order_by(User.id.desc()).all()
+
+    if is_super_admin(user_obj):
+        boss_requests_query = User.query.filter_by(role='boss', approval_status='pending')
+        if filters['company_id'].isdigit():
+            boss_requests_query = boss_requests_query.filter_by(company_id=int(filters['company_id']))
+        if filters['boss_id'].isdigit():
+            boss_requests_query = boss_requests_query.filter_by(id=int(filters['boss_id']))
+        if filters['user_search']:
+            like = f"%{filters['user_search']}%"
+            boss_requests_query = boss_requests_query.filter(
+                or_(
+                    User.username.ilike(like),
+                    User.full_name.ilike(like),
+                    User.email.ilike(like)
+                )
+            )
+        boss_requests = boss_requests_query.order_by(User.id.asc()).all()
 
     action_form = ActionForm()
     company_form = CompanyForm()
@@ -1052,6 +1189,7 @@ def build_admin_context(user_obj):
     company_ids.update({c.company_id for c in cars if c.company_id})
     company_ids.update({b.company_id for b in bookings if b.company_id})
     company_ids.update({c.id for c in companies})
+    company_ids.update({c.id for c in company_filter_options})
     if company_ids:
         linked_companies = Company.query.filter(Company.id.in_(company_ids)).all()
         company_map = {c.id: c.name for c in linked_companies}
@@ -1062,8 +1200,12 @@ def build_admin_context(user_obj):
         'cars': cars,
         'bookings': bookings,
         'companies': companies,
+        'company_filter_options': company_filter_options,
         'support_requests': support_requests,
         'manager_requests': manager_requests,
+        'boss_requests': boss_requests,
+        'boss_filter_options': boss_filter_options,
+        'filters': filters,
         'action_form': action_form,
         'company_form': company_form,
         'notification_form': notification_form,
@@ -1089,6 +1231,7 @@ def boss_dashboard():
         flash('Access denied')
         return redirect(url_for('home'))
     context = build_admin_context(current_user)
+    context['boss_pending'] = current_user.approval_status != 'approved'
     return render_template('boss_dashboard.html', **context)
 
 @app.route('/dashboard/manager')
@@ -1114,6 +1257,67 @@ def super_admin_dashboard():
         return redirect(url_for('home'))
     context = build_admin_context(current_user)
     return render_template('super_admin_dashboard.html', **context)
+
+@app.route('/superadmin/approve_boss/<int:user_id>', methods=['POST'])
+@login_required
+def approve_boss(user_id):
+    if not is_super_admin(current_user):
+        flash('Access denied')
+        return redirect(url_for('home'))
+    form = ActionForm()
+    if not form.validate_on_submit():
+        flash('Invalid request')
+        return redirect(url_for('super_admin_dashboard'))
+    boss_user = User.query.filter_by(id=user_id, role='boss').first_or_404()
+    if boss_user.approval_status == 'approved':
+        flash('Boss is already approved.')
+        return redirect(url_for('super_admin_dashboard'))
+    if not boss_user.company_id and boss_user.company_name:
+        linked_company = Company.query.filter(func.lower(Company.name) == boss_user.company_name.lower()).first()
+        if linked_company:
+            boss_user.company_id = linked_company.id
+    boss_user.approval_status = 'approved'
+    boss_user.approved_by_id = current_user.id
+    if boss_user.company_id:
+        company = db.session.get(Company, boss_user.company_id)
+        if company and company.owner_id and company.owner_id != boss_user.id:
+            flash('This company is already controlled by another boss.')
+            return redirect(url_for('super_admin_dashboard'))
+        if company and not company.owner_id:
+            company.owner_id = boss_user.id
+        other_pending_bosses = User.query.filter(
+            User.role == 'boss',
+            User.company_id == boss_user.company_id,
+            User.id != boss_user.id,
+            User.approval_status == 'pending'
+        ).all()
+        for other_boss in other_pending_bosses:
+            other_boss.approval_status = 'rejected'
+            other_boss.approved_by_id = current_user.id
+    db.session.commit()
+    flash(f'Boss {boss_user.username} approved by king.')
+    return redirect(url_for('super_admin_dashboard'))
+
+@app.route('/superadmin/reject_boss/<int:user_id>', methods=['POST'])
+@login_required
+def reject_boss(user_id):
+    if not is_super_admin(current_user):
+        flash('Access denied')
+        return redirect(url_for('home'))
+    form = ActionForm()
+    if not form.validate_on_submit():
+        flash('Invalid request')
+        return redirect(url_for('super_admin_dashboard'))
+    boss_user = User.query.filter_by(id=user_id, role='boss').first_or_404()
+    boss_user.approval_status = 'rejected'
+    boss_user.approved_by_id = current_user.id
+    if boss_user.company_id:
+        company = db.session.get(Company, boss_user.company_id)
+        if company and company.owner_id == boss_user.id:
+            company.owner_id = None
+    db.session.commit()
+    flash(f'Boss {boss_user.username} rejected by king.')
+    return redirect(url_for('super_admin_dashboard'))
 
 @app.route('/superadmin/send_notification', methods=['POST'])
 @login_required
@@ -1326,7 +1530,7 @@ def delete_user(user_id):
 @app.route('/admin/approve_manager/<int:user_id>', methods=['POST'])
 @login_required
 def approve_manager(user_id):
-    if not is_boss(current_user):
+    if not is_boss_approved(current_user):
         flash('Only company boss can approve managers.')
         return redirect(url_for(dashboard_endpoint_for(current_user)))
     form = ActionForm()
@@ -1357,7 +1561,7 @@ def approve_manager(user_id):
 @app.route('/admin/reject_manager/<int:user_id>', methods=['POST'])
 @login_required
 def reject_manager(user_id):
-    if not is_boss(current_user):
+    if not is_boss_approved(current_user):
         flash('Only company boss can reject managers.')
         return redirect(url_for(dashboard_endpoint_for(current_user)))
     form = ActionForm()
@@ -1398,7 +1602,7 @@ def create_company():
     new_company = Company(name=company_name)
     db.session.add(new_company)
     db.session.commit()
-    flash('Company created.')
+    flash('Company created. Approve/link a boss to activate company control.')
     return redirect(url_for('super_admin_dashboard'))
 
 @app.route('/superadmin/company/delete/<int:company_id>', methods=['POST'])

@@ -368,6 +368,12 @@ textarea:focus {
     max-width: 620px;
 }
 
+.filter-grid {
+    max-width: 100%;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    align-items: end;
+}
+
 label {
     display: grid;
     gap: 0.34rem;
