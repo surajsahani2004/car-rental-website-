@@ -337,8 +337,9 @@
                     <tr>
                         <td>{{ car.id }}</td>
                         <td>
-                            {% if car.image %}
-                                <img class="car-thumb" src="{{ url_for('static', filename=car.image) }}" alt="{{ car.name }} photo">
+                            {% set img_src = car_image_src(car) %}
+                            {% if img_src %}
+                                <img class="car-thumb" src="{{ img_src }}" alt="{{ car.name }} photo">
                             {% else %}
                                 <span class="muted">No photo</span>
                             {% endif %}

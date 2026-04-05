@@ -8,12 +8,11 @@ from wtforms.validators import DataRequired, Email, EqualTo, NumberRange, Length
 from datetime import datetime
 from sqlalchemy import or_, text, func, inspect
 from sqlalchemy.exc import IntegrityError
-from werkzeug.utils import secure_filename
+import base64
 import qrcode
 import io
 import tempfile
 import os
-from uuid import uuid4
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
@@ -193,6 +192,16 @@ def ensure_car_columns():
             if 'company_id' not in cols:
                 conn.execute(text('ALTER TABLE "car" ADD COLUMN IF NOT EXISTS company_id INTEGER'))
 
+def ensure_car_image_columns():
+    with db.engine.begin() as conn:
+        cols = {col['name'] for col in inspect(db.engine).get_columns('car')}
+        if db.engine.name == 'sqlite':
+            if 'image_data' not in cols:
+                conn.execute(text('ALTER TABLE "car" ADD COLUMN image_data TEXT'))
+        else:
+            if 'image_data' not in cols:
+                conn.execute(text('ALTER TABLE "car" ADD COLUMN IF NOT EXISTS image_data TEXT'))
+
 def ensure_booking_company_column():
     with db.engine.begin() as conn:
         cols = {col['name'] for col in inspect(db.engine).get_columns('booking')}
@@ -237,14 +246,20 @@ def ensure_support_columns():
 
 def save_car_photo(photo_file):
     if not photo_file or not photo_file.filename:
-        return None
-    os.makedirs(app.config['CAR_UPLOAD_FOLDER'], exist_ok=True)
-    original_name = secure_filename(photo_file.filename)
-    _, ext = os.path.splitext(original_name)
-    unique_name = f"car_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{uuid4().hex[:8]}{ext.lower()}"
-    absolute_path = os.path.join(app.config['CAR_UPLOAD_FOLDER'], unique_name)
-    photo_file.save(absolute_path)
-    return os.path.join('uploads', 'cars', unique_name).replace('\\', '/')
+        return None, None
+
+    # Store image in database as data URI so it survives Render restarts/deploys.
+    file_bytes = photo_file.read()
+    if not file_bytes:
+        return None, None
+
+    mime_type = (photo_file.mimetype or '').strip().lower()
+    if not mime_type.startswith('image/'):
+        mime_type = 'image/jpeg'
+
+    encoded = base64.b64encode(file_bytes).decode('ascii')
+    image_data_uri = f"data:{mime_type};base64,{encoded}"
+    return None, image_data_uri
 
 def ensure_default_super_admin():
     default_username = 'king'
@@ -404,6 +419,7 @@ class Car(db.Model):
     price_per_day = db.Column(db.Float, nullable=False)
     available = db.Column(db.Boolean, default=True)
     image = db.Column(db.String(300))
+    image_data = db.Column(db.Text)
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'))
 
 class Booking(db.Model):
@@ -555,6 +571,7 @@ def initialize_schema_once():
     ensure_user_profile_columns()
     ensure_booking_columns()
     ensure_car_columns()
+    ensure_car_image_columns()
     ensure_booking_company_column()
     ensure_support_columns()
     backfill_company_links()
@@ -680,13 +697,32 @@ def support():
 
 @app.context_processor
 def inject_unread_notifications():
+    def car_image_src(car):
+        if not car:
+            return None
+
+        if getattr(car, 'image_data', None):
+            return car.image_data
+
+        image_value = (getattr(car, 'image', None) or '').strip()
+        if not image_value:
+            return None
+        if image_value.startswith(('http://', 'https://', 'data:')):
+            return image_value
+
+        local_path = os.path.normpath(os.path.join(app.static_folder, image_value))
+        static_root = os.path.normpath(app.static_folder)
+        if not local_path.startswith(static_root):
+            return None
+        if not os.path.exists(local_path):
+            return None
+        return url_for('static', filename=image_value)
+
+    unread_count = 0
     if not current_user.is_authenticated:
-        return {'unread_notifications': 0}
-    unread_count = Notification.query.filter_by(
-        recipient_id=current_user.id,
-        is_read=False
-    ).count()
-    return {'unread_notifications': unread_count}
+        return {'unread_notifications': unread_count, 'car_image_src': car_image_src}
+    unread_count = Notification.query.filter_by(recipient_id=current_user.id, is_read=False).count()
+    return {'unread_notifications': unread_count, 'car_image_src': car_image_src}
 
 @app.route('/notifications')
 @login_required
@@ -1412,13 +1448,14 @@ def add_car():
         if not target_company_id:
             flash('No company linked for this action.')
             return redirect(url_for(dashboard_endpoint_for(current_user)))
-        image_path = save_car_photo(form.photo.data)
+        image_path, image_data = save_car_photo(form.photo.data)
         car = Car(
             name=form.name.data,
             model=form.model.data,
             city=form.city.data,
             price_per_day=form.price_per_day.data,
             image=image_path,
+            image_data=image_data,
             company_id=target_company_id
         )
         db.session.add(car)
@@ -1637,6 +1674,7 @@ if __name__ == '__main__':
         ensure_user_profile_columns()
         ensure_booking_columns()
         ensure_car_columns()
+        ensure_car_image_columns()
         ensure_booking_company_column()
         ensure_support_columns()
         backfill_company_links()

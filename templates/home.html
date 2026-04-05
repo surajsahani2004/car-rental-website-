@@ -25,8 +25,9 @@
         {% for car in cars %}
             <article class="shop-card">
                 <div class="car-photo-wrap">
-                    {% if car.image %}
-                        <img class="car-photo" src="{{ url_for('static', filename=car.image) }}" alt="{{ car.name }} photo" loading="lazy" onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;car-photo placeholder&quot;>No Photo</div>');">
+                    {% set img_src = car_image_src(car) %}
+                    {% if img_src %}
+                        <img class="car-photo" src="{{ img_src }}" alt="{{ car.name }} photo" loading="lazy" onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;car-photo placeholder&quot;>No Photo</div>');">
                     {% else %}
                         <div class="car-photo placeholder">No Photo</div>
                     {% endif %}
