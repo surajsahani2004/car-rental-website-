@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+    <h2>Select Company</h2>
+    <p class="muted">Choose your company to see available cars and book correctly.</p>
+    <form method="POST" class="form-card">
+        {{ form.hidden_tag() }}
+        <label>{{ form.company_id.label }}
+            {{ form.company_id() }}
+        </label>
+        {{ form.submit(class_='btn') }}
+    </form>
+</section>
+{% endblock %}

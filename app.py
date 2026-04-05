@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm
@@ -525,6 +525,10 @@ class CompanyForm(FlaskForm):
     name = StringField('Company Name', validators=[DataRequired()])
     submit = SubmitField('Create Company')
 
+class CustomerCompanyForm(FlaskForm):
+    company_id = SelectField('Select Your Company', coerce=int, validators=[DataRequired()])
+    submit = SubmitField('Save Company')
+
 class SupportForm(FlaskForm):
     name = StringField('Name')
     email = StringField('Email')
@@ -562,6 +566,43 @@ def notification_recipient_choices(sender_id):
         choices.append((user.id, label))
     return choices
 
+def chatbot_reply_for(message_text, user_obj):
+    message = (message_text or '').strip().lower()
+    if not message:
+        return "Please type a message. For example: booking, login, register, payment."
+
+    if any(word in message for word in ['hello', 'hi', 'hey', 'namaste', 'bhai']):
+        if user_obj and user_obj.is_authenticated:
+            display_name = user_obj.full_name or user_obj.username
+            return f"Hi {display_name}! I am your Safar Suvidha assistant. Ask me about booking, login, payment, or dashboard."
+        return "Hi! I am your Safar Suvidha assistant. Ask me about booking, login, payment, or dashboard."
+
+    if any(word in message for word in ['register', 'signup', 'sign up']):
+        return "Use Register from the top navbar. Customer can register directly, and Boss/Manager should use Admin Access code flow."
+
+    if any(word in message for word in ['login', 'sign in', 'signin']):
+        return "Use Login from the navbar. After login, dashboard opens based on role: customer, manager, boss, or king."
+
+    if any(word in message for word in ['book', 'booking', 'rent']):
+        return "Booking steps: Login as customer -> choose car -> select dates -> pay -> download invoice."
+
+    if any(word in message for word in ['payment', 'pay', 'invoice', 'bill']):
+        return "After creating a booking, complete payment on the payment page. Then invoice download becomes available."
+
+    if any(word in message for word in ['admin', 'boss', 'manager', 'king', 'approval']):
+        return "Approval flow: boss approval is done by king. Manager approval is done by approved company boss."
+
+    if any(word in message for word in ['company', 'filter', 'dashboard']):
+        return "King dashboard supports company, role, boss, and user search filters to view specific data."
+
+    if any(word in message for word in ['photo', 'image', 'car photo']):
+        return "Car photo now saves in database for persistence. If an old photo is missing, re-upload once from Add Car."
+
+    if any(word in message for word in ['help', 'complaint', 'support']):
+        return "Use Help/Complaint from navbar to send a request directly to king (super admin)."
+
+    return "I can help with register, login, booking, payment, dashboard filters, approvals, and support. Ask me any one of these."
+
 @app.before_request
 def initialize_schema_once():
     if app.config.get('_schema_initialized'):
@@ -590,6 +631,14 @@ def home():
     active_company_name = None
 
     if current_user.is_authenticated:
+        if current_user.role == 'customer' and not current_user.company_id:
+            if current_user.company_name:
+                linked_company = Company.query.filter(func.lower(Company.name) == current_user.company_name.lower()).first()
+                if linked_company:
+                    current_user.company_id = linked_company.id
+                    db.session.commit()
+            if not current_user.company_id:
+                return redirect(url_for('select_customer_company'))
         if not is_super_admin(current_user):
             cars_query = apply_company_scope(cars_query, Car.company_id, current_user)
             if current_user.company_id:
@@ -747,6 +796,37 @@ def mark_notification_read(notification_id):
     notification.is_read = True
     db.session.commit()
     return redirect(url_for('notifications'))
+
+@app.route('/customer/select-company', methods=['GET', 'POST'])
+@login_required
+def select_customer_company():
+    if current_user.role != 'customer':
+        flash('Only customer account can select company from this page.')
+        return redirect(url_for(dashboard_endpoint_for(current_user)))
+
+    companies = Company.query.order_by(Company.name.asc()).all()
+    if not companies:
+        flash('No company available yet. Ask king/boss to create company first.')
+        return redirect(url_for('home'))
+
+    form = CustomerCompanyForm()
+    form.company_id.choices = [(company.id, company.name) for company in companies]
+
+    if request.method == 'GET' and current_user.company_id:
+        form.company_id.data = current_user.company_id
+
+    if form.validate_on_submit():
+        selected_company = db.session.get(Company, form.company_id.data)
+        if not selected_company:
+            flash('Selected company not found.')
+            return redirect(url_for('select_customer_company'))
+        current_user.company_id = selected_company.id
+        current_user.company_name = selected_company.name
+        db.session.commit()
+        flash(f'Company linked: {selected_company.name}')
+        return redirect(url_for('home'))
+
+    return render_template('select_company.html', form=form)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -906,6 +986,15 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.password == form.password.data:
             login_user(user)
+            if user.role == 'customer' and not user.company_id:
+                if user.company_name:
+                    linked_company = Company.query.filter(func.lower(Company.name) == user.company_name.lower()).first()
+                    if linked_company:
+                        user.company_id = linked_company.id
+                        db.session.commit()
+                if not user.company_id:
+                    flash('Please select your company first to view and book cars.')
+                    return redirect(url_for('select_customer_company'))
             if user.role == 'boss' and user.approval_status != 'approved':
                 flash('Boss account is pending king approval.')
                 return redirect(url_for('boss_dashboard'))
