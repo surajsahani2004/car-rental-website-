@@ -9,6 +9,7 @@
                 <tr>
                     <th>ID</th>
                     <th>Car</th>
+                    <th>Company</th>
                     <th>Dates</th>
                     <th>Total</th>
                     <th>Status</th>
@@ -21,6 +22,7 @@
                     <tr>
                         <td>{{ booking.id }}</td>
                         <td>{{ booking.car.name }}</td>
+                        <td>{{ company_map.get(booking.company_id, '-') if company_map else '-' }}</td>
                         <td>{{ booking.start_date }} to {{ booking.end_date }}</td>
                         <td>${{ '%.2f'|format(booking.total_cost) }}</td>
                         <td>{{ booking.status }}</td>

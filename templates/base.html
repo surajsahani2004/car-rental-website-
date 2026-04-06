@@ -23,9 +23,6 @@
                     <a href="{{ url_for('notifications') }}">
                         Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}
                     </a>
-                    {% if current_user.role == 'customer' and not current_user.company_id %}
-                        <a href="{{ url_for('select_customer_company') }}">Select Company</a>
-                    {% endif %}
                     <a href="{{ url_for('support') }}">Help/Complaint</a>
                     {% if current_user.role == 'customer' %}
                         <a href="{{ url_for('my_bookings') }}">My Bookings</a>

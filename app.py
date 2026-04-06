@@ -67,7 +67,7 @@ def dashboard_endpoint_for(user):
     return 'home'
 
 def apply_company_scope(query, company_column, user_obj):
-    if is_super_admin(user_obj):
+    if is_super_admin(user_obj) or user_obj.role == 'customer':
         return query
     if not user_obj.company_id:
         return query.filter(company_column == -1)
@@ -627,25 +627,21 @@ def index():
 @app.route('/home')
 def home():
     search = request.args.get('q', '').strip()
+    selected_city = request.args.get('city', '').strip()
+    selected_company_id = request.args.get('company_id', '').strip()
+    min_price_raw = request.args.get('min_price', '').strip()
+    max_price_raw = request.args.get('max_price', '').strip()
     cars_query = Car.query.filter_by(available=True)
     active_company_name = None
 
     if current_user.is_authenticated:
-        if current_user.role == 'customer' and not current_user.company_id:
-            if current_user.company_name:
-                linked_company = Company.query.filter(func.lower(Company.name) == current_user.company_name.lower()).first()
-                if linked_company:
-                    current_user.company_id = linked_company.id
-                    db.session.commit()
-            if not current_user.company_id:
-                return redirect(url_for('select_customer_company'))
-        if not is_super_admin(current_user):
+        if current_user.role in {'customer', 'super_admin', 'admin'}:
+            active_company_name = 'All Companies'
+        else:
             cars_query = apply_company_scope(cars_query, Car.company_id, current_user)
             if current_user.company_id:
                 company = db.session.get(Company, current_user.company_id)
                 active_company_name = company.name if company else None
-        else:
-            active_company_name = 'All Companies'
 
     if search:
         like = f"%{search}%"
@@ -656,8 +652,48 @@ def home():
                 Car.city.ilike(like)
             )
         )
+
+    if selected_city:
+        cars_query = cars_query.filter(func.lower(Car.city) == selected_city.lower())
+
+    if selected_company_id.isdigit():
+        cars_query = cars_query.filter(Car.company_id == int(selected_company_id))
+
+    min_price = ''
+    max_price = ''
+    if min_price_raw:
+        try:
+            min_price_value = float(min_price_raw)
+            cars_query = cars_query.filter(Car.price_per_day >= min_price_value)
+            min_price = min_price_raw
+        except ValueError:
+            flash('Min price filter ignored (invalid value).')
+
+    if max_price_raw:
+        try:
+            max_price_value = float(max_price_raw)
+            cars_query = cars_query.filter(Car.price_per_day <= max_price_value)
+            max_price = max_price_raw
+        except ValueError:
+            flash('Max price filter ignored (invalid value).')
+
     cars = cars_query.all()
-    return render_template('home.html', cars=cars, search=search, active_company_name=active_company_name)
+    city_options = [row[0] for row in db.session.query(Car.city).filter(Car.available == True).distinct().order_by(Car.city.asc()).all()]
+    company_options = Company.query.order_by(Company.name.asc()).all()
+    company_map = {company.id: company.name for company in company_options}
+    return render_template(
+        'home.html',
+        cars=cars,
+        search=search,
+        active_company_name=active_company_name,
+        city_options=city_options,
+        company_options=company_options,
+        company_map=company_map,
+        selected_city=selected_city,
+        selected_company_id=selected_company_id,
+        min_price=min_price,
+        max_price=max_price
+    )
 
 @app.route('/auth/user')
 def user_portal():
@@ -925,10 +961,10 @@ def register():
                 company_name = selected_company.name
             elif len(available_companies) == 0:
                 company_name = None
-                registration_note = 'Account created. Boss must create company before booking.'
+                registration_note = 'Account created. You can browse cars after companies/cars are added.'
             else:
                 company_name = None
-                registration_note = 'Account created without company link. Ask your boss to map your account.'
+                registration_note = 'Account created. You can browse and book from all companies.'
 
         user = User(
             username=form.username.data,
@@ -986,15 +1022,6 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and user.password == form.password.data:
             login_user(user)
-            if user.role == 'customer' and not user.company_id:
-                if user.company_name:
-                    linked_company = Company.query.filter(func.lower(Company.name) == user.company_name.lower()).first()
-                    if linked_company:
-                        user.company_id = linked_company.id
-                        db.session.commit()
-                if not user.company_id:
-                    flash('Please select your company first to view and book cars.')
-                    return redirect(url_for('select_customer_company'))
             if user.role == 'boss' and user.approval_status != 'approved':
                 flash('Boss account is pending king approval.')
                 return redirect(url_for('boss_dashboard'))
@@ -1020,12 +1047,9 @@ def book_car(car_id):
     if not current_user.age or current_user.age < 18:
         flash('Only 18+ users can book cars.')
         return redirect(url_for('home'))
-    if not current_user.company_id:
-        flash('Customer account is not linked to any company.')
-        return redirect(url_for('home'))
-    car = Car.query.filter_by(id=car_id, available=True, company_id=current_user.company_id).first()
+    car = Car.query.filter_by(id=car_id, available=True).first()
     if not car:
-        flash('Car not found in your company.')
+        flash('Car not found.')
         return redirect(url_for('home'))
     form = BookingForm()
     if form.validate_on_submit():
@@ -1037,7 +1061,6 @@ def book_car(car_id):
             return redirect(url_for('book_car', car_id=car_id))
         overlapping = Booking.query.filter(
             Booking.car_id == car_id,
-            Booking.company_id == current_user.company_id,
             Booking.status != 'cancelled',
             Booking.start_date < end_date,
             Booking.end_date > start_date
@@ -1056,7 +1079,7 @@ def book_car(car_id):
             total_cost=total_cost,
             status='pending',
             payment_status='pending',
-            company_id=current_user.company_id
+            company_id=car.company_id
         )
         db.session.add(booking)
         db.session.commit()
@@ -1158,11 +1181,13 @@ def my_bookings():
     if current_user.role != 'customer':
         flash('Only customer accounts have booking history.')
         return redirect(url_for('home'))
-    bookings = Booking.query.filter_by(
-        user_id=current_user.id,
-        company_id=current_user.company_id
-    ).order_by(Booking.id.desc()).all()
-    return render_template('bookings.html', bookings=bookings)
+    bookings = Booking.query.filter_by(user_id=current_user.id).order_by(Booking.id.desc()).all()
+    company_ids = {b.company_id for b in bookings if b.company_id}
+    company_map = {}
+    if company_ids:
+        linked_companies = Company.query.filter(Company.id.in_(company_ids)).all()
+        company_map = {c.id: c.name for c in linked_companies}
+    return render_template('bookings.html', bookings=bookings, company_map=company_map)
 
 def build_admin_context(user_obj):
     users_query = User.query

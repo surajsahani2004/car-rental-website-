@@ -212,6 +212,10 @@ footer,
     align-items: center;
 }
 
+.search-form-extended {
+    grid-template-columns: 1.8fr repeat(4, minmax(120px, 1fr)) auto auto;
+}
+
 .search-form input,
 input,
 select,
@@ -437,6 +441,10 @@ th {
 
     .fk-actions {
         flex-wrap: wrap;
+    }
+
+    .search-form-extended {
+        grid-template-columns: 1fr 1fr;
     }
 }
 

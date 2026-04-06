@@ -10,12 +10,24 @@
             <p class="muted">Company: {{ active_company_name }}</p>
         {% endif %}
     </div>
-    <form class="search-form" method="GET" action="{{ url_for('home') }}">
+    <form class="search-form search-form-extended" method="GET" action="{{ url_for('home') }}">
         <input type="text" name="q" placeholder="Search by name, model, or city" value="{{ search }}">
+        <select name="city">
+            <option value="">All Cities</option>
+            {% for city in city_options %}
+                <option value="{{ city }}" {% if selected_city == city %}selected{% endif %}>{{ city }}</option>
+            {% endfor %}
+        </select>
+        <select name="company_id">
+            <option value="">All Companies</option>
+            {% for company in company_options %}
+                <option value="{{ company.id }}" {% if selected_company_id == company.id|string %}selected{% endif %}>{{ company.name }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" name="min_price" placeholder="Min Price" value="{{ min_price }}">
+        <input type="text" name="max_price" placeholder="Max Price" value="{{ max_price }}">
         <button type="submit" class="btn">Search</button>
-        {% if search %}
-            <a class="link" href="{{ url_for('home') }}">Clear</a>
-        {% endif %}
+        <a class="link" href="{{ url_for('home') }}">Clear</a>
     </form>
 </section>
 
@@ -36,6 +48,7 @@
                     <h3>{{ car.name }}</h3>
                     <span class="badge">{{ car.city }}</span>
                 </div>
+                <p class="muted">Company: {{ company_map.get(car.company_id, '-') if company_map else '-' }}</p>
                 <p class="muted">Model {{ car.model }}</p>
                 <p class="price-tag">${{ '%.2f'|format(car.price_per_day) }} <span>/ day</span></p>
                 {% if current_user.is_authenticated and current_user.role not in admin_roles %}
